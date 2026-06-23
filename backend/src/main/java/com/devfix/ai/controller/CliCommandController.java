@@ -1,5 +1,6 @@
 package com.devfix.ai.controller;
 
+import com.devfix.ai.dto.ApiResponse;
 import com.devfix.ai.dto.CliCommandRequest;
 import com.devfix.ai.dto.CliCommandResponse;
 import com.devfix.ai.service.CliService;
@@ -19,7 +20,7 @@ public class CliCommandController {
     }
 
     @PostMapping("/search")
-    public CliCommandResponse search(@Valid @RequestBody CliCommandRequest request) {
-        return cliService.searchCommand(request);
+    public ApiResponse<CliCommandResponse> search(@Valid @RequestBody CliCommandRequest request) {
+        return ApiResponse.ok(cliService.searchCommand(request));
     }
 }

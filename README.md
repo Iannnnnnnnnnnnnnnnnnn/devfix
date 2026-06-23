@@ -19,6 +19,7 @@ devfix-ai
 ├── docs
 │   ├── api.md
 │   ├── database.sql
+│   ├── tui-migration.sql
 │   └── prompt.md
 └── README.md
 ```
@@ -35,6 +36,19 @@ source docs/database.sql;
 ```
 
 也可以在项目根目录执行 `docs/database.sql` 中的完整 SQL。
+
+如果已经建过旧表，只需要执行 TUI 增量 SQL：
+
+```bash
+mysql -uroot -p devfix_ai < docs/tui-migration.sql
+```
+
+本项目需要的核心表：
+
+- `diagnosis_record`：Web 版日志分析主记录。
+- `diagnosis_result`：Web 版分析结果明细。
+- `devai_analysis_history`：CLI / TUI 分析和命令查询历史。
+- `devai_knowledge_doc`：知识文档整理预留表。
 
 ### 2. 配置环境变量
 
@@ -54,10 +68,26 @@ export DB_USERNAME="root"
 export DB_PASSWORD="你的MySQL密码"
 ```
 
+DeepSeek 相关配置：
+
+```bash
+export DEEPSEEK_API_KEY="你的DeepSeek API Key"
+export DEEPSEEK_BASE_URL="https://api.deepseek.com"
+export DEEPSEEK_MODEL="deepseek-chat"
+```
+
+Windows PowerShell：
+
+```powershell
+$env:DEEPSEEK_API_KEY="你的DeepSeek API Key"
+$env:DEEPSEEK_BASE_URL="https://api.deepseek.com"
+$env:DEEPSEEK_MODEL="deepseek-chat"
+```
+
 默认配置：
 
 - 后端端口：`8088`
-- 前端端口：`5173`
+- 前端端口：`5191`
 - MySQL：`localhost:3306/devfix_ai`
 - DeepSeek Base URL：`https://api.deepseek.com`
 - DeepSeek Model：`deepseek-v4-flash`
@@ -92,7 +122,7 @@ npm run dev
 前端访问地址：
 
 ```text
-http://localhost:5173
+http://localhost:5191
 ```
 
 如需指定后端地址：
@@ -134,7 +164,9 @@ devai cmd docker
 ```json
 {
   "apiBaseUrl": "http://localhost:8088",
-  "defaultModel": "deepseek-chat"
+  "defaultModel": "deepseek-chat",
+  "debug": false,
+  "autoSaveHistory": true
 }
 ```
 
@@ -179,6 +211,20 @@ devai cmd docker --json
 devai analyze --file ./logs/error.log
 ```
 
+TUI 测试示例：
+
+```bash
+devai tui
+```
+
+```bash
+devai tui --api http://localhost:8088 --debug
+```
+
+```bash
+devai tui --json-log
+```
+
 支持 `.log`、`.txt`、`.out` 文件。小于 200KB 的文件会直接读取全文；大文件会优先提取包含 `ERROR`、`Exception`、`Caused by`、`Traceback`、`panic`、`fatal`、`failed` 的关键片段，提取不到时读取末尾 500 行。
 
 JSON 输出：
@@ -186,6 +232,66 @@ JSON 输出：
 ```bash
 devai analyze --file ./logs/error.log --json
 ```
+
+## TUI 使用方式
+
+先启动后端：
+
+```bash
+cd backend
+mvn spring-boot:run
+```
+
+安装并启动 TUI：
+
+```bash
+cd devai-cli
+npm install
+npm run build
+npm link
+devai tui
+```
+
+指定后端地址：
+
+```bash
+DEVAI_API_BASE_URL=http://localhost:8088 devai tui
+```
+
+也可以只对本次 TUI 会话覆盖：
+
+```bash
+devai tui --api http://localhost:8088
+```
+
+调试和操作日志：
+
+```bash
+devai tui --debug
+devai tui --json-log
+```
+
+`--json-log` 会写入 `~/.devai/tui-logs.jsonl`。
+
+TUI 主菜单包含：
+
+1. 粘贴报错日志分析
+2. 查询常用开发命令
+3. 分析本地日志文件
+4. 查看最近分析历史
+5. 配置后端地址 / 模型
+6. 知识文档整理
+7. 退出
+
+快捷键：
+
+- `↑/↓`：选择菜单
+- `Enter`：确认
+- `Esc` 或 `b`：返回
+- `q`：退出
+- `Ctrl+C`：强制退出
+
+TUI 仍然只调用本地后端 API，不会直接调用 DeepSeek，也不会保存 API Key。
 
 ### 本地测试示例
 
@@ -260,6 +366,20 @@ curl -X POST http://localhost:8088/api/cmd/search \
   }'
 ```
 
+TUI 最近历史：
+
+```bash
+curl "http://localhost:8088/api/history/recent?limit=20"
+```
+
+知识文档整理占位：
+
+```bash
+curl -X POST http://localhost:8088/api/knowledge/generate \
+  -H "Content-Type: application/json" \
+  -d '{"source":"tui-manual"}'
+```
+
 历史记录：
 
 ```bash
@@ -281,6 +401,15 @@ curl http://localhost:8088/api/diagnosis/1
 - 日志过长时，发送给 AI 的内容会保留前后片段，中间部分截断；数据库保存脱敏后的完整日志。
 - CLI 不直接调用 AI API，只调用本地后端接口。
 - CLI 来源调用会额外写入 `devai_analysis_history`，为后续知识库整理能力预留。
+- TUI 配置文件不存在时会自动创建 `~/.devai/config.json`。
+
+## TUI 常见问题
+
+1. `devai` 命令不存在：进入 `devai-cli` 执行 `npm install && npm run build && npm link`。
+2. 无法连接后端：确认 `cd backend && mvn spring-boot:run` 已启动，并检查 `DEVAI_API_BASE_URL` 或 `~/.devai/config.json`。
+3. Windows 下路径包含中文或空格：在 TUI 中直接粘贴完整路径；命令行里建议用英文双引号包裹路径。
+4. 日志文件过大：CLI / TUI 最大读取 10MB，超过后先手动截取关键日志。
+5. TUI 显示乱码：确认终端编码为 UTF-8，Windows Terminal / PowerShell 里可先执行 `chcp 65001`。
 
 ## 上传到 GitHub
 

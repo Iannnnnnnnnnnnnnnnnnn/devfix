@@ -1,5 +1,6 @@
 package com.devfix.ai.controller;
 
+import com.devfix.ai.dto.ApiResponse;
 import com.devfix.ai.dto.CliAnalyzeRequest;
 import com.devfix.ai.dto.CliAnalyzeResponse;
 import com.devfix.ai.service.CliService;
@@ -19,12 +20,12 @@ public class CliAnalyzeController {
     }
 
     @PostMapping("/log")
-    public CliAnalyzeResponse analyzeLog(@Valid @RequestBody CliAnalyzeRequest request) {
-        return cliService.analyzeLog(request);
+    public ApiResponse<CliAnalyzeResponse> analyzeLog(@Valid @RequestBody CliAnalyzeRequest request) {
+        return ApiResponse.ok(cliService.analyzeLog(request));
     }
 
     @PostMapping("/file")
-    public CliAnalyzeResponse analyzeFile(@Valid @RequestBody CliAnalyzeRequest request) {
-        return cliService.analyzeFile(request);
+    public ApiResponse<CliAnalyzeResponse> analyzeFile(@Valid @RequestBody CliAnalyzeRequest request) {
+        return ApiResponse.ok(cliService.analyzeFile(request));
     }
 }

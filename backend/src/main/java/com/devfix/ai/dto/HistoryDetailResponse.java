@@ -1,8 +1,8 @@
-package com.devfix.ai.domain.entity;
+package com.devfix.ai.dto;
 
 import java.time.LocalDateTime;
 
-public class AnalysisHistory {
+public class HistoryDetailResponse {
     private Long id;
     private String source;
     private String question;

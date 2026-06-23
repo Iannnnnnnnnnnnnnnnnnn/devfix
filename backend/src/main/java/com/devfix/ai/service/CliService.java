@@ -12,6 +12,9 @@ import com.devfix.ai.dto.CommandItem;
 import com.devfix.ai.dto.CommandRecommendRequest;
 import com.devfix.ai.dto.CommandRecommendResponse;
 import com.devfix.ai.dto.DiagnosisResponse;
+import com.devfix.ai.dto.HistoryDetailResponse;
+import com.devfix.ai.dto.HistoryListResponse;
+import com.devfix.ai.dto.HistorySummaryResponse;
 import com.devfix.ai.exception.AppException;
 import com.devfix.ai.mapper.AnalysisHistoryMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -59,8 +62,32 @@ public class CliService {
         CommandRecommendResponse recommendResponse = commandService.recommend(recommendRequest);
 
         CliCommandResponse response = toCliCommandResponse(request.getKeyword(), recommendResponse);
-        saveHistory("cli-cmd", request.getKeyword(), request.getKeyword(), response);
+        saveHistory(defaultText(request.getSource(), "cli-cmd"), request.getKeyword(), request.getKeyword(),
+                response, response.getScenario(), response.getCategory(), request.getModelName());
         return response;
+    }
+
+    public HistoryListResponse recentHistory(int limit) {
+        int normalizedLimit = Math.max(1, Math.min(limit, 100));
+        HistoryListResponse response = new HistoryListResponse();
+        response.setList(historyMapper.findRecent(normalizedLimit).stream()
+                .map(this::toHistorySummary)
+                .toList());
+        return response;
+    }
+
+    public HistoryDetailResponse historyDetail(Long id) {
+        AnalysisHistory history = historyMapper.findById(id);
+        if (history == null) {
+            throw new AppException(HttpStatus.NOT_FOUND, "历史记录不存在");
+        }
+        return toHistoryDetail(history);
+    }
+
+    public void deleteHistory(Long id) {
+        if (historyMapper.deleteById(id) == 0) {
+            throw new AppException(HttpStatus.NOT_FOUND, "历史记录不存在");
+        }
     }
 
     private CliAnalyzeResponse analyze(CliAnalyzeRequest request, String source, String projectName) {
@@ -72,7 +99,8 @@ public class CliService {
 
         DiagnosisResponse diagnosis = diagnosisService.analyze(analyzeRequest);
         CliAnalyzeResponse response = toCliAnalyzeResponse(diagnosis);
-        saveHistory(source, projectName, request.getContent(), response);
+        saveHistory(source, projectName, request.getContent(), response,
+                response.getErrorType(), response.getErrorType(), request.getModelName());
         return response;
     }
 
@@ -111,13 +139,41 @@ public class CliService {
         return response;
     }
 
-    private void saveHistory(String source, String question, String rawContent, Object result) {
+    private HistorySummaryResponse toHistorySummary(AnalysisHistory history) {
+        HistorySummaryResponse response = new HistorySummaryResponse();
+        response.setId(history.getId());
+        response.setSource(history.getSource());
+        response.setSummary(history.getSummary());
+        response.setErrorType(history.getErrorType());
+        response.setCreatedAt(history.getCreatedAt());
+        return response;
+    }
+
+    private HistoryDetailResponse toHistoryDetail(AnalysisHistory history) {
+        HistoryDetailResponse response = new HistoryDetailResponse();
+        response.setId(history.getId());
+        response.setSource(history.getSource());
+        response.setQuestion(history.getQuestion());
+        response.setRawContent(history.getRawContent());
+        response.setResultJson(history.getResultJson());
+        response.setModelName(history.getModelName());
+        response.setSummary(history.getSummary());
+        response.setErrorType(history.getErrorType());
+        response.setCreatedAt(history.getCreatedAt());
+        response.setUpdatedAt(history.getUpdatedAt());
+        return response;
+    }
+
+    private void saveHistory(String source, String question, String rawContent, Object result,
+                             String summary, String errorType, String requestedModelName) {
         AnalysisHistory history = new AnalysisHistory();
         history.setSource(source);
         history.setQuestion(question);
         history.setRawContent(rawContent);
         history.setResultJson(toJson(result));
-        history.setModelName(deepSeekProperties.getModel());
+        history.setModelName(defaultText(requestedModelName, deepSeekProperties.getModel()));
+        history.setSummary(summary);
+        history.setErrorType(errorType);
         historyMapper.insert(history);
     }
 

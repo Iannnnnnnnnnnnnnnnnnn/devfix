@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import { registerAnalyzeCommand } from './commands/analyze.js';
 import { registerCmdCommand } from './commands/cmd.js';
 import { registerPasteCommand } from './commands/paste.js';
+import { registerTuiCommand } from './commands/tui.js';
 
 const program = new Command();
 
@@ -14,6 +15,7 @@ program
 registerPasteCommand(program);
 registerCmdCommand(program);
 registerAnalyzeCommand(program);
+registerTuiCommand(program);
 
 program.parseAsync(process.argv).catch((error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);

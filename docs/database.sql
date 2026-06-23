@@ -31,11 +31,25 @@ CREATE TABLE IF NOT EXISTS diagnosis_result (
 
 CREATE TABLE IF NOT EXISTS devai_analysis_history (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    source VARCHAR(30) NOT NULL,
-    question VARCHAR(500),
-    raw_content MEDIUMTEXT,
-    result_json JSON,
+    source VARCHAR(50),
+    question TEXT,
+    raw_content LONGTEXT,
+    result_json LONGTEXT,
     model_name VARCHAR(100),
+    summary VARCHAR(500),
+    error_type VARCHAR(200),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_source_created_at (source, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS devai_knowledge_doc (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    title VARCHAR(255),
+    category VARCHAR(100),
+    tags VARCHAR(500),
+    content LONGTEXT,
+    source_history_ids TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

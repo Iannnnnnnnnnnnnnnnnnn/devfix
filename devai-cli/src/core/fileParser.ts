@@ -4,7 +4,7 @@ import path from 'node:path';
 const DIRECT_READ_LIMIT_BYTES = 200 * 1024;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const TAIL_LINES = 500;
-const KEYWORD_PATTERN = /(ERROR|Exception|Caused by|Traceback|panic|fatal|failed)/i;
+const KEYWORD_PATTERN = /(ERROR|Exception|Caused by|Traceback|panic|fatal|failed|denied|timeout|refused)/i;
 const SUPPORTED_EXTENSIONS = new Set(['.log', '.txt', '.out']);
 
 export async function parseLogFile(filePath: string): Promise<{ fileName: string; content: string }> {
