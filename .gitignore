@@ -2,6 +2,8 @@
 backend/target/
 web/dist/
 web/node_modules/
+devai-cli/dist/
+devai-cli/node_modules/
 
 # Runtime logs
 *.log

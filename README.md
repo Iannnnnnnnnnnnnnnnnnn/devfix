@@ -14,6 +14,7 @@
 ```text
 devfix-ai
 ├── backend
+├── devai-cli
 ├── web
 ├── docs
 │   ├── api.md
@@ -100,6 +101,106 @@ http://localhost:5173
 VITE_API_BASE_URL=http://localhost:8088 npm run dev
 ```
 
+### 5. 安装 CLI
+
+```bash
+cd devai-cli
+npm install
+npm run build
+npm link
+```
+
+安装后可以直接使用：
+
+```bash
+devai --help
+```
+
+CLI 默认后端地址为 `http://localhost:8088`，和当前后端端口保持一致。也可以通过环境变量覆盖：
+
+```bash
+DEVAI_API_BASE_URL=http://localhost:8088 devai cmd docker
+```
+
+Windows PowerShell：
+
+```powershell
+$env:DEVAI_API_BASE_URL="http://localhost:8088"
+devai cmd docker
+```
+
+后续可扩展本地配置文件：
+
+```json
+{
+  "apiBaseUrl": "http://localhost:8088",
+  "defaultModel": "deepseek-chat"
+}
+```
+
+配置文件路径：`~/.devai/config.json`。
+
+## CLI 使用
+
+### 粘贴日志分析
+
+```bash
+devai paste
+```
+
+输入日志后，用 `EOF`、`---END---` 或 Ctrl+D 结束输入。
+
+JSON 输出：
+
+```bash
+devai paste --json
+```
+
+### 查询常用命令
+
+```bash
+devai cmd docker
+devai cmd mysql
+devai cmd linux log
+devai cmd nginx
+devai cmd git rollback
+devai cmd java process
+```
+
+JSON 输出：
+
+```bash
+devai cmd docker --json
+```
+
+### 分析本地日志文件
+
+```bash
+devai analyze --file ./logs/error.log
+```
+
+支持 `.log`、`.txt`、`.out` 文件。小于 200KB 的文件会直接读取全文；大文件会优先提取包含 `ERROR`、`Exception`、`Caused by`、`Traceback`、`panic`、`fatal`、`failed` 的关键片段，提取不到时读取末尾 500 行。
+
+JSON 输出：
+
+```bash
+devai analyze --file ./logs/error.log --json
+```
+
+### 本地测试示例
+
+```bash
+devai cmd docker
+```
+
+```bash
+printf "java.lang.IllegalStateException: demo\nCaused by: config missing\nEOF\n" | devai paste
+```
+
+```bash
+devai analyze --file ./logs/error.log
+```
+
 ## API 示例
 
 日志分析：
@@ -112,6 +213,29 @@ curl -X POST http://localhost:8088/api/diagnosis/analyze \
     "errorType": "spring",
     "environment": "local",
     "logContent": "报错日志内容"
+}'
+```
+
+CLI 日志分析兼容接口：
+
+```bash
+curl -X POST http://localhost:8088/api/analyze/log \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "报错日志内容",
+    "source": "cli-paste"
+  }'
+```
+
+CLI 文件分析兼容接口：
+
+```bash
+curl -X POST http://localhost:8088/api/analyze/file \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fileName": "error.log",
+    "content": "文件中提取出的关键日志内容",
+    "source": "cli-file"
   }'
 ```
 
@@ -123,6 +247,16 @@ curl -X POST http://localhost:8088/api/command/recommend \
   -d '{
     "question": "查看 nginx 最近 200 行错误日志",
     "environment": "linux"
+}'
+```
+
+CLI 命令查询兼容接口：
+
+```bash
+curl -X POST http://localhost:8088/api/cmd/search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "keyword": "docker logs"
   }'
 ```
 
@@ -145,6 +279,8 @@ curl http://localhost:8088/api/diagnosis/1
 - 命令风险等级包括 `safe`、`warning`、`danger`、`blocked`。
 - 后端会对日志中包含 `password=`、`token=`、`secret=`、`Authorization` 的内容做基础脱敏后再保存。
 - 日志过长时，发送给 AI 的内容会保留前后片段，中间部分截断；数据库保存脱敏后的完整日志。
+- CLI 不直接调用 AI API，只调用本地后端接口。
+- CLI 来源调用会额外写入 `devai_analysis_history`，为后续知识库整理能力预留。
 
 ## 上传到 GitHub
 

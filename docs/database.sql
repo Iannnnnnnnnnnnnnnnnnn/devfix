@@ -28,3 +28,14 @@ CREATE TABLE IF NOT EXISTS diagnosis_result (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (diagnosis_id) REFERENCES diagnosis_record(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS devai_analysis_history (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    source VARCHAR(30) NOT NULL,
+    question VARCHAR(500),
+    raw_content MEDIUMTEXT,
+    result_json JSON,
+    model_name VARCHAR(100),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_source_created_at (source, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

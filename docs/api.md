@@ -75,6 +75,79 @@
 }
 ```
 
+## CLI 日志分析
+
+`POST /api/analyze/log`
+
+请求：
+
+```json
+{
+  "content": "报错日志内容",
+  "source": "cli-paste"
+}
+```
+
+响应：
+
+```json
+{
+  "id": 1,
+  "errorType": "Spring Boot 启动失败",
+  "cause": "application.yml 中存在 Git 冲突标记",
+  "keyLines": ["<<<<<<< HEAD"],
+  "impact": "服务无法启动",
+  "solution": ["删除 Git 冲突标记", "重新启动服务"],
+  "commands": ["grep -n \"<<<<<<<\\|=======\\|>>>>>>>\" application.yml"],
+  "knowledge": ["YAML 文件不能包含 Git 冲突标记"]
+}
+```
+
+## CLI 文件分析
+
+`POST /api/analyze/file`
+
+请求：
+
+```json
+{
+  "fileName": "error.log",
+  "content": "文件中提取出的关键日志内容",
+  "source": "cli-file"
+}
+```
+
+响应格式同 `/api/analyze/log`。
+
+## CLI 命令查询
+
+`POST /api/cmd/search`
+
+请求：
+
+```json
+{
+  "keyword": "docker logs"
+}
+```
+
+响应：
+
+```json
+{
+  "category": "Docker",
+  "scenario": "docker logs",
+  "commands": [
+    {
+      "command": "docker logs -f 容器名",
+      "description": "实时查看容器日志",
+      "example": "docker logs -f 容器名"
+    }
+  ],
+  "tips": []
+}
+```
+
 响应：
 
 ```json
