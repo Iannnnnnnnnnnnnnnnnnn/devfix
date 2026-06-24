@@ -4,10 +4,19 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class CliCommandResponse {
+    private Long historyId;
     private String category;
     private String scenario;
     private List<CliCommandItem> commands = new ArrayList<>();
     private List<String> tips = new ArrayList<>();
+
+    public Long getHistoryId() {
+        return historyId;
+    }
+
+    public void setHistoryId(Long historyId) {
+        this.historyId = historyId;
+    }
 
     public String getCategory() {
         return category;

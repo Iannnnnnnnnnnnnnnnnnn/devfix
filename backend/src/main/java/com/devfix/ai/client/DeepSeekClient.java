@@ -53,6 +53,31 @@ public class DeepSeekClient {
         return parseStrictJson(content, responseType);
     }
 
+    public String chatText(String systemPrompt, String userPrompt) {
+        validateConfig();
+        Map<String, Object> body = Map.of(
+                "model", properties.getModel(),
+                "temperature", 0.2,
+                "messages", List.of(
+                        Map.of("role", "system", "content", systemPrompt),
+                        Map.of("role", "user", "content", userPrompt)
+                )
+        );
+
+        String responseBody = restClientBuilder
+                .baseUrl(trimTrailingSlash(properties.getBaseUrl()))
+                .build()
+                .post()
+                .uri("/chat/completions")
+                .contentType(MediaType.APPLICATION_JSON)
+                .headers(headers -> headers.setBearerAuth(properties.getApiKey()))
+                .body(body)
+                .retrieve()
+                .body(String.class);
+
+        return extractAssistantContent(responseBody);
+    }
+
     private void validateConfig() {
         if (properties.getApiKey() == null || properties.getApiKey().isBlank()) {
             throw new AppException(HttpStatus.INTERNAL_SERVER_ERROR, "未配置 DEEPSEEK_API_KEY 环境变量");

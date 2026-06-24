@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import { registerAnalyzeCommand } from './commands/analyze.js';
+import { registerBugCommand } from './commands/bug.js';
 import { registerCmdCommand } from './commands/cmd.js';
 import { registerPasteCommand } from './commands/paste.js';
+import { registerProjectCommand } from './commands/project.js';
+import { registerSceneCommand } from './commands/scene.js';
+import { registerSummaryCommand } from './commands/summary.js';
 import { registerTuiCommand } from './commands/tui.js';
 
 const program = new Command();
@@ -15,6 +19,10 @@ program
 registerPasteCommand(program);
 registerCmdCommand(program);
 registerAnalyzeCommand(program);
+registerProjectCommand(program);
+registerSceneCommand(program);
+registerSummaryCommand(program);
+registerBugCommand(program);
 registerTuiCommand(program);
 
 program.parseAsync(process.argv).catch((error: unknown) => {

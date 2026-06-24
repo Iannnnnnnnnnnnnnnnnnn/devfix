@@ -1,23 +1,39 @@
 import { FormEvent, useState } from 'react';
 import { recommendCommand } from '../api';
-import type { CommandItem } from '../types';
-import { CommandList, ErrorBlock } from './shared';
+import MarkdownViewer from '../components/markdown/MarkdownViewer';
+import type { CommandSearchResponse, Project, Scene } from '../types';
+import { EmptyBlock, ErrorBlock, ProjectPicker, ScenePicker, SimpleCommandList } from './shared';
 
 export default function CommandPage() {
+  const [project, setProject] = useState<Project | null>(null);
+  const [scene, setScene] = useState<Scene | null>(null);
   const [question, setQuestion] = useState('');
-  const [environment, setEnvironment] = useState('linux');
-  const [commands, setCommands] = useState<CommandItem[]>([]);
+  const [result, setResult] = useState<CommandSearchResponse | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (!project) {
+      setError('请先选择项目 / 技术域。');
+      return;
+    }
+    if (!scene) {
+      setError('请先选择场景。');
+      return;
+    }
     setError('');
-    setCommands([]);
+    setResult(null);
     setSubmitting(true);
     try {
-      const data = await recommendCommand({ question, environment });
-      setCommands(data.commands);
+      const data = await recommendCommand({
+        projectId: project.id,
+        sceneId: scene.id,
+        keyword: question,
+        question,
+        source: 'web-cmd',
+      });
+      setResult(data);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -29,15 +45,12 @@ export default function CommandPage() {
     <div className="page">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Command</p>
-          <h1>Linux 命令助手</h1>
+          <h1>命令助手</h1>
         </div>
       </header>
       <form className="form-panel" onSubmit={handleSubmit}>
-        <label>
-          环境
-          <input value={environment} onChange={(event) => setEnvironment(event.target.value)} placeholder="linux" />
-        </label>
+        <ProjectPicker value={project?.id} onChange={setProject} allowCreate />
+        <ScenePicker projectId={project?.id} value={scene?.id} onChange={setScene} allowCreate />
         <label>
           自然语言需求
           <textarea
@@ -53,10 +66,19 @@ export default function CommandPage() {
         </button>
       </form>
       <ErrorBlock message={error} />
-      {commands.length ? (
+      {result ? (
         <section className="panel full">
-          <h2>推荐命令</h2>
-          <CommandList commands={commands} />
+          <h2>{result.scenario || '推荐命令'}</h2>
+          {result.historyId ? <p className="muted">历史记录 ID：{result.historyId}</p> : null}
+          <SimpleCommandList commands={result.commands} />
+          <div className="command-tips">
+            <h2>补充说明</h2>
+            {result.tips?.length ? (
+              result.tips.map((tip, index) => <MarkdownViewer content={tip} key={`${tip}-${index}`} />)
+            ) : (
+              <EmptyBlock text="暂无内容" />
+            )}
+          </div>
         </section>
       ) : null}
     </div>

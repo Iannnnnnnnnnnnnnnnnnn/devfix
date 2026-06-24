@@ -2,6 +2,10 @@ package com.devfix.ai.service;
 
 import com.devfix.ai.config.DeepSeekProperties;
 import com.devfix.ai.domain.entity.AnalysisHistory;
+import com.devfix.ai.domain.entity.CommandHistory;
+import com.devfix.ai.domain.entity.DevaiScene;
+import com.devfix.ai.domain.entity.DevaiProject;
+import com.devfix.ai.domain.entity.LogAnalysisHistory;
 import com.devfix.ai.dto.AnalyzeRequest;
 import com.devfix.ai.dto.CliAnalyzeRequest;
 import com.devfix.ai.dto.CliAnalyzeResponse;
@@ -17,6 +21,8 @@ import com.devfix.ai.dto.HistoryListResponse;
 import com.devfix.ai.dto.HistorySummaryResponse;
 import com.devfix.ai.exception.AppException;
 import com.devfix.ai.mapper.AnalysisHistoryMapper;
+import com.devfix.ai.mapper.CommandHistoryMapper;
+import com.devfix.ai.mapper.LogAnalysisHistoryMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -28,18 +34,30 @@ import java.util.List;
 public class CliService {
     private final DiagnosisService diagnosisService;
     private final CommandService commandService;
+    private final ProjectService projectService;
+    private final SceneService sceneService;
     private final AnalysisHistoryMapper historyMapper;
+    private final LogAnalysisHistoryMapper logHistoryMapper;
+    private final CommandHistoryMapper commandHistoryMapper;
     private final DeepSeekProperties deepSeekProperties;
     private final ObjectMapper objectMapper;
 
     public CliService(DiagnosisService diagnosisService,
                       CommandService commandService,
+                      ProjectService projectService,
+                      SceneService sceneService,
                       AnalysisHistoryMapper historyMapper,
+                      LogAnalysisHistoryMapper logHistoryMapper,
+                      CommandHistoryMapper commandHistoryMapper,
                       DeepSeekProperties deepSeekProperties,
                       ObjectMapper objectMapper) {
         this.diagnosisService = diagnosisService;
         this.commandService = commandService;
+        this.projectService = projectService;
+        this.sceneService = sceneService;
         this.historyMapper = historyMapper;
+        this.logHistoryMapper = logHistoryMapper;
+        this.commandHistoryMapper = commandHistoryMapper;
         this.deepSeekProperties = deepSeekProperties;
         this.objectMapper = objectMapper;
     }
@@ -56,12 +74,19 @@ public class CliService {
 
     @Transactional
     public CliCommandResponse searchCommand(CliCommandRequest request) {
+        DevaiProject project = projectService.requireProject(request.getProjectId());
+        DevaiScene scene = sceneService.requireSceneInProject(project.getId(), request.getSceneId());
+        String environment = defaultText(request.getEnvironment(), "Other");
+        String question = defaultText(request.getQuestion(), request.getKeyword());
         CommandRecommendRequest recommendRequest = new CommandRecommendRequest();
-        recommendRequest.setQuestion(request.getKeyword());
-        recommendRequest.setEnvironment("cli");
+        recommendRequest.setQuestion(question);
+        recommendRequest.setEnvironment(environment);
         CommandRecommendResponse recommendResponse = commandService.recommend(recommendRequest);
 
-        CliCommandResponse response = toCliCommandResponse(request.getKeyword(), recommendResponse);
+        CliCommandResponse response = toCliCommandResponse(question, environment, recommendResponse);
+        Long historyId = saveCommandHistory(project.getId(), scene.getId(), environment, defaultText(request.getSource(), "cli-cmd"),
+                request.getKeyword(), question, response, response.getScenario(), request.getModelName());
+        response.setHistoryId(historyId);
         saveHistory(defaultText(request.getSource(), "cli-cmd"), request.getKeyword(), request.getKeyword(),
                 response, response.getScenario(), response.getCategory(), request.getModelName());
         return response;
@@ -90,16 +115,21 @@ public class CliService {
         }
     }
 
-    private CliAnalyzeResponse analyze(CliAnalyzeRequest request, String source, String projectName) {
+    private CliAnalyzeResponse analyze(CliAnalyzeRequest request, String source, String question) {
+        DevaiProject project = projectService.requireProject(request.getProjectId());
+        DevaiScene scene = sceneService.requireSceneInProject(project.getId(), request.getSceneId());
         AnalyzeRequest analyzeRequest = new AnalyzeRequest();
-        analyzeRequest.setProjectName(projectName);
+        analyzeRequest.setProjectName(project.getName());
         analyzeRequest.setErrorType("cli-log");
         analyzeRequest.setEnvironment("local-cli");
         analyzeRequest.setLogContent(request.getContent());
 
         DiagnosisResponse diagnosis = diagnosisService.analyze(analyzeRequest);
         CliAnalyzeResponse response = toCliAnalyzeResponse(diagnosis);
-        saveHistory(source, projectName, request.getContent(), response,
+        Long historyId = saveLogHistory(project.getId(), scene.getId(), source, question, request.getContent(), response,
+                response.getErrorType(), response.getErrorType(), request.getModelName());
+        response.setHistoryId(historyId);
+        saveHistory(source, question, request.getContent(), response,
                 response.getErrorType(), response.getErrorType(), request.getModelName());
         return response;
     }
@@ -120,9 +150,9 @@ public class CliService {
         return response;
     }
 
-    private CliCommandResponse toCliCommandResponse(String keyword, CommandRecommendResponse recommendResponse) {
+    private CliCommandResponse toCliCommandResponse(String keyword, String environment, CommandRecommendResponse recommendResponse) {
         CliCommandResponse response = new CliCommandResponse();
-        response.setCategory(inferCategory(keyword));
+        response.setCategory(defaultText(environment, inferCategory(keyword)));
         response.setScenario(keyword);
         response.setCommands(recommendResponse.getCommands().stream().map(item -> {
             CliCommandItem cliItem = new CliCommandItem();
@@ -137,6 +167,40 @@ public class CliService {
                 .distinct()
                 .toList());
         return response;
+    }
+
+    private Long saveLogHistory(Long projectId, Long sceneId, String source, String question, String rawContent, CliAnalyzeResponse result,
+                                String summary, String errorType, String requestedModelName) {
+        LogAnalysisHistory history = new LogAnalysisHistory();
+        history.setProjectId(projectId);
+        history.setSceneId(sceneId);
+        history.setSource(source);
+        history.setQuestion(question);
+        history.setRawContent(rawContent);
+        history.setResultJson(toJson(result));
+        history.setModelName(defaultText(requestedModelName, deepSeekProperties.getModel()));
+        history.setSummary(summary);
+        history.setErrorType(errorType);
+        history.setKeyLines(toJson(result.getKeyLines()));
+        history.setSolution(toJson(result.getSolution()));
+        logHistoryMapper.insert(history);
+        return history.getId();
+    }
+
+    private Long saveCommandHistory(Long projectId, Long sceneId, String environment, String source, String keyword, String question,
+                                    CliCommandResponse result, String summary, String requestedModelName) {
+        CommandHistory history = new CommandHistory();
+        history.setProjectId(projectId);
+        history.setSceneId(sceneId);
+        history.setEnvironment(environment);
+        history.setSource(source);
+        history.setKeyword(keyword);
+        history.setQuestion(question);
+        history.setResultJson(toJson(result));
+        history.setModelName(defaultText(requestedModelName, deepSeekProperties.getModel()));
+        history.setSummary(summary);
+        commandHistoryMapper.insert(history);
+        return history.getId();
     }
 
     private HistorySummaryResponse toHistorySummary(AnalysisHistory history) {

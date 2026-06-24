@@ -5,6 +5,7 @@ import java.util.List;
 
 public class CliAnalyzeResponse {
     private Long id;
+    private Long historyId;
     private String errorType;
     private String cause;
     private List<String> keyLines = new ArrayList<>();
@@ -19,6 +20,14 @@ public class CliAnalyzeResponse {
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public Long getHistoryId() {
+        return historyId;
+    }
+
+    public void setHistoryId(Long historyId) {
+        this.historyId = historyId;
     }
 
     public String getErrorType() {

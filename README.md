@@ -1,6 +1,6 @@
 # devfix-ai
 
-本地 Web 版 AI 开发排错助手。用户粘贴开发报错日志后，后端调用 DeepSeek API 生成排错结论、关键证据、可能原因、排查命令、修复步骤和风险提醒，并将分析结果保存到 MySQL。
+本地 Web + CLI/TUI 版 AI 开发排错助手。用户可以分析报错日志、查询开发命令，并按项目沉淀历史记录；命令历史还能按项目和所属环境分组，后续可手动触发 AI 生成 Markdown 总结文档。
 
 ## 技术栈
 
@@ -19,7 +19,6 @@ devfix-ai
 ├── docs
 │   ├── api.md
 │   ├── database.sql
-│   ├── tui-migration.sql
 │   └── prompt.md
 └── README.md
 ```
@@ -37,17 +36,16 @@ source docs/database.sql;
 
 也可以在项目根目录执行 `docs/database.sql` 中的完整 SQL。
 
-如果已经建过旧表，只需要执行 TUI 增量 SQL：
-
-```bash
-mysql -uroot -p devfix_ai < docs/tui-migration.sql
-```
-
 本项目需要的核心表：
 
 - `diagnosis_record`：Web 版日志分析主记录。
 - `diagnosis_result`：Web 版分析结果明细。
 - `devai_analysis_history`：CLI / TUI 分析和命令查询历史。
+- `devai_project`：项目 / 技术域列表，由用户创建维护，系统不内置默认项目。
+- `devai_scene`：项目 / 技术域下的场景，由用户创建维护，系统不内置默认场景。
+- `devai_log_analysis_history`：日志分析历史，按项目 / 技术域和场景分组。
+- `devai_command_history`：命令查询历史，按项目 / 技术域和场景分组。
+- `devai_summary_doc`：手动触发生成的总结文档。
 - `devai_knowledge_doc`：知识文档整理预留表。
 
 ### 2. 配置环境变量
@@ -178,6 +176,7 @@ devai cmd docker
 
 ```bash
 devai paste
+devai paste --project DevAI
 ```
 
 输入日志后，用 `EOF`、`---END---` 或 Ctrl+D 结束输入。
@@ -192,6 +191,7 @@ devai paste --json
 
 ```bash
 devai cmd docker
+devai cmd docker logs --project DevAI --scene 本地启动排查
 devai cmd mysql
 devai cmd linux log
 devai cmd nginx
@@ -209,6 +209,14 @@ devai cmd docker --json
 
 ```bash
 devai analyze --file ./logs/error.log
+devai analyze --file ./logs/error.log --project DevAI
+```
+
+项目管理：
+
+```bash
+devai project list
+devai project create DevAI
 ```
 
 TUI 测试示例：
@@ -278,10 +286,12 @@ TUI 主菜单包含：
 1. 粘贴报错日志分析
 2. 查询常用开发命令
 3. 分析本地日志文件
-4. 查看最近分析历史
-5. 配置后端地址 / 模型
-6. 知识文档整理
+4. 查看历史记录
+5. 总结文档
+6. 配置后端地址 / 模型
 7. 退出
+
+进入日志分析、命令查询、文件分析、历史记录、总结文档前，TUI 会先选择项目；命令查询和命令总结会选择环境，跳过环境时按 `Other` 处理。
 
 快捷键：
 
@@ -328,6 +338,7 @@ CLI 日志分析兼容接口：
 curl -X POST http://localhost:8088/api/analyze/log \
   -H "Content-Type: application/json" \
   -d '{
+    "projectId": 1,
     "content": "报错日志内容",
     "source": "cli-paste"
   }'
@@ -339,6 +350,7 @@ CLI 文件分析兼容接口：
 curl -X POST http://localhost:8088/api/analyze/file \
   -H "Content-Type: application/json" \
   -d '{
+    "projectId": 1,
     "fileName": "error.log",
     "content": "文件中提取出的关键日志内容",
     "source": "cli-file"
@@ -362,28 +374,60 @@ CLI 命令查询兼容接口：
 curl -X POST http://localhost:8088/api/cmd/search \
   -H "Content-Type: application/json" \
   -d '{
-    "keyword": "docker logs"
+    "projectId": 1,
+    "environment": "Docker",
+    "keyword": "docker logs",
+    "question": "如何实时查看 Docker 容器日志",
+    "source": "cli-cmd"
   }'
 ```
 
-TUI 最近历史：
+项目列表：
 
 ```bash
-curl "http://localhost:8088/api/history/recent?limit=20"
+curl http://localhost:8088/api/projects
 ```
 
-知识文档整理占位：
+创建项目：
 
 ```bash
-curl -X POST http://localhost:8088/api/knowledge/generate \
+curl -X POST http://localhost:8088/api/projects \
   -H "Content-Type: application/json" \
-  -d '{"source":"tui-manual"}'
+  -d '{"name":"DevAI","description":"AI 报错分析助手"}'
 ```
 
-历史记录：
+日志分析历史：
 
 ```bash
-curl http://localhost:8088/api/diagnosis/history
+curl "http://localhost:8088/api/history/logs?projectId=1&page=1&pageSize=20"
+```
+
+命令查询历史：
+
+```bash
+curl "http://localhost:8088/api/history/commands?projectId=1&environment=Docker&page=1&pageSize=20"
+```
+
+手动生成命令总结：
+
+```bash
+curl -X POST http://localhost:8088/api/summary/commands/generate \
+  -H "Content-Type: application/json" \
+  -d '{"projectId":1,"environment":"Docker"}'
+```
+
+手动生成日志问题报告：
+
+```bash
+curl -X POST http://localhost:8088/api/summary/logs/generate \
+  -H "Content-Type: application/json" \
+  -d '{"projectId":1}'
+```
+
+总结文档列表：
+
+```bash
+curl "http://localhost:8088/api/summary/docs?projectId=1&type=command"
 ```
 
 详情：
@@ -400,8 +444,110 @@ curl http://localhost:8088/api/diagnosis/1
 - 后端会对日志中包含 `password=`、`token=`、`secret=`、`Authorization` 的内容做基础脱敏后再保存。
 - 日志过长时，发送给 AI 的内容会保留前后片段，中间部分截断；数据库保存脱敏后的完整日志。
 - CLI 不直接调用 AI API，只调用本地后端接口。
-- CLI 来源调用会额外写入 `devai_analysis_history`，为后续知识库整理能力预留。
+- Web、CLI、TUI 的日志分析会写入 `devai_log_analysis_history`。
+- Web、CLI、TUI 的命令查询会写入 `devai_command_history`。
+- 命令总结和日志问题报告只通过 Web/TUI/接口手动触发，AI API 仍只由后端调用。
 - TUI 配置文件不存在时会自动创建 `~/.devai/config.json`。
+
+## 本地测试命令
+
+```bash
+curl http://localhost:8088/api/projects
+devai project list
+devai project create DevAI
+devai scene create --project DevAI --name 本地启动排查
+devai cmd docker logs --project DevAI --scene 本地启动排查
+devai analyze --file ./logs/error.log --project DevAI --scene 本地启动排查
+curl "http://localhost:8088/api/history/commands?projectId=1&sceneId=2"
+curl -X POST http://localhost:8088/api/summary/commands/generate -H "Content-Type: application/json" -d "{\"projectId\":1,\"environment\":\"Docker\"}"
+```
+
+## 总结文档导入导出
+
+Web 后台进入“总结文档”页面后，可以：
+
+- 点击单条记录的“导出”，下载 `.devai-summary.json` 文件。
+- 勾选多条记录后点击“批量导出”，下载批量 JSON 文件。
+- 点击“导入总结文档”，选择 `.devai-summary.json` 文件，先解析预览，再确认项目、总结类型、环境、标题和标签后导入。
+
+导入时需要重新选择项目和环境，因为导出文件里的 `project.id` 来自另一套数据库时可能不一致。最终保存使用当前系统里的 `projectId`，不会信任导入文件中的项目 id。
+
+导入导出统一使用 JSON 格式：
+
+```json
+{
+  "format": "devai-summary-doc",
+  "version": "1.0",
+  "exportedAt": "2026-06-24 18:30:00",
+  "project": {
+    "id": 1,
+    "name": "DevAI",
+    "description": "AI 报错分析助手"
+  },
+  "summary": {
+    "id": 1001,
+    "summaryType": "command",
+    "environment": "Docker",
+    "title": "Docker 常用命令总结",
+    "content": "# Docker 常用命令总结\n\n...",
+    "tags": ["Docker", "日志排查"],
+    "sourceCount": 12,
+    "sourceIds": [1, 2, 3],
+    "modelName": "deepseek-chat"
+  }
+}
+```
+
+CLI 导出：
+
+```bash
+devai summary export --id 1001 --output ./docker-summary.devai-summary.json
+```
+
+CLI 导入：
+
+```bash
+devai summary import --file ./docker-summary.devai-summary.json --project DevAI --scene 本地启动排查 --type command
+```
+
+常见错误：
+
+- 文件超过 5MB：拆分后再导入。
+- `format` 或 `version` 不正确：确认文件来自 DevAI 总结文档导出功能。
+- 导入总结缺少场景：选择场景或传 `--scene`。
+- 检测到重复：Web 可勾选“仍然导入可能重复的文档”，CLI 可加 `--allow-duplicate`。
+
+## Bug 档案 / 排查记录
+
+Web 后台将 Bug 模块拆成两个入口：
+
+- `Bug 档案`：只负责查询、筛选、列表展示和查看详情，路由为 `/bug/archive`。
+- `新建 Bug`：负责创建 Bug 问题、输入排查过程、AI 整理和保存归档，路由为 `/bug/new`。
+
+Bug 档案页使用“顶部搜索区 + 左侧问题类型 + 右侧问题列表”的结构：
+
+- 顶部支持按项目、场景、关键词、状态、错误类型、标签筛选。
+- 左侧问题类型从已有 Bug 档案的 `error_type` 聚合，不内置默认类型。
+- 问题名称或“查看详情”进入 `/bug/archive/{id}`。
+- 详情页按“Bug 档案 / 项目 / 场景 / 问题名称”展示概要和排查记录时间线。
+- 在详情页点击“新增排查记录”会跳转到 `/bug/new?issueId={id}` 继续归档。
+
+数据库新增两张表：
+
+- `devai_bug_issue`：保存问题名称、状态、错误类型、标签、摘要和关联预留字段。
+- `devai_bug_investigation_record`：保存原始输入、AI 总结、最终归档内容、来源和模型名。
+
+CLI 命令：
+
+```bash
+devai bug create --project DevAI --name "后端启动失败：8088 端口被占用"
+devai bug note --project DevAI --issue "后端启动失败：8088 端口被占用"
+devai bug search "8088 端口" --project DevAI
+```
+
+TUI 主菜单新增“Bug 排查记录”，提供新建问题、记录排查过程、查看档案和搜索档案入口。
+
+AI API 仍然只由后端调用，前端、CLI、TUI 都不会读取或传递 AI API Key。
 
 ## TUI 常见问题
 

@@ -26,7 +26,6 @@ export default function DetailPage() {
     <div className="page">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Detail</p>
           <h1>分析详情</h1>
         </div>
         <Link className="action-button" to="/history">

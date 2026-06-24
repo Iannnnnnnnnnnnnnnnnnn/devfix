@@ -5,6 +5,7 @@ export interface CommandSearchItem {
 }
 
 export interface CommandSearchResponse {
+  historyId?: number;
   category?: string;
   scenario?: string;
   commands?: CommandSearchItem[];

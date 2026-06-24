@@ -1,5 +1,6 @@
 export interface AnalyzeResponse {
   id?: number;
+  historyId?: number;
   errorType?: string;
   cause?: string;
   keyLines?: string[];
